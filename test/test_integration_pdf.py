@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,11 @@ def _require_toolchain():
                if not shutil.which(tool)]
     if missing:
         pytest.fail(f"Integration toolchain is incomplete: {', '.join(missing)}")
+
+
+def _pdf_text_key(value: str) -> str:
+    """Normalize PDF extraction presentation without hiding punctuation changes."""
+    return "".join(unicodedata.normalize("NFKC", value).split())
 
 
 def _fictional_docx(path: Path):
@@ -51,6 +57,8 @@ def _fictional_docx(path: Path):
 @pytest.mark.integration
 def test_fictional_docx_to_verified_pdf(tmp_path):
     _require_toolchain()
+    assert _pdf_text_key("架空: 「教育」_１００% #１") == _pdf_text_key("架空:「教育」_100% #1")
+    assert _pdf_text_key("O’Connor") != _pdf_text_key("O'Connor")
     source = tmp_path / "fictional.docx"
     _fictional_docx(source)
     artifacts = Path("test-artifacts")
@@ -76,6 +84,14 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
         raise
     assert output.read_bytes().startswith(b"%PDF-") and output.stat().st_size > 10_000
 
+    # Establish where transformations occur: both pre-PDF stages must retain
+    # ASCII digits and the straight apostrophe from the Word properties.
+    markdown_source = (tmp_path / "manuscript.md").read_text(encoding="utf-8")
+    latex_source = (tmp_path / "manuscript.tex").read_text(encoding="utf-8")
+    assert expected_title in markdown_source and expected_author in markdown_source
+    assert "100" in latex_source and "１００" not in latex_source
+    assert "O'Connor" in latex_source and "O’Connor" not in latex_source
+
     shutil.copy2(output, artifacts / "fictional-manuscript.pdf")
     subprocess.run(["pdftoppm", "-png", "-r", "120", str(output), str(artifacts / "page")], check=True)
 
@@ -83,11 +99,25 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
     pages = int(next(line.split(":", 1)[1] for line in info.splitlines() if line.startswith("Pages:")))
     assert pages >= 1
     text = subprocess.run(["pdftotext", str(output), "-"], check=True, capture_output=True, text=True).stdout
-    assert expected_title in text, "PDF title differs from the Word core property"
-    assert expected_author in text, "PDF author differs from the Word core property"
-    for expected in ("教育&学習", "山田 花子", "O'Connor", "日本語本文", "架空条件", "E=mc", "参考文献"):
-        assert expected in text, f"PDF text is missing or garbled: {expected}"
+    raw_text = subprocess.run(["pdftotext", "-raw", str(output), "-"], check=True, capture_output=True, text=True).stdout
+    (artifacts / "pdftotext.txt").write_text(text, encoding="utf-8")
+    (artifacts / "pdftotext-raw.txt").write_text(raw_text, encoding="utf-8")
     images = subprocess.run(["pdfimages", "-list", str(output)], check=True, capture_output=True, text=True).stdout
-    assert len(images.splitlines()) > 2, "PDF contains no embedded image"
 
-    assert len(list(artifacts.glob("page-*.png"))) == pages
+    # NFKC handles full-width presentation glyphs and whitespace removal handles
+    # layout reconstruction. It deliberately does not equate ' with ’.
+    expected_text = {
+        "title": expected_title,
+        "author": expected_author,
+        "body": "日本語本文と特殊文字 # $ % & _ { } ~ ^ \\ を安全に変換する。",
+        "table": "架空条件 42",
+        "math": "E=mc²",
+        "references": "山田花子（2026）架空研究の方法。架空出版。",
+    }
+    extracted_key = _pdf_text_key(text)
+    failures = [name for name, expected in expected_text.items() if _pdf_text_key(expected) not in extracted_key]
+    if len(images.splitlines()) <= 2:
+        failures.append("image")
+    if len(list(artifacts.glob("page-*.png"))) != pages:
+        failures.append("rendered pages")
+    assert not failures, f"PDF verification failures: {', '.join(failures)}"
