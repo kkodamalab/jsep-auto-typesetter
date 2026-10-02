@@ -1,7 +1,27 @@
 \documentclass[a4paper]{ltjsarticle}
 \usepackage[margin=$margin$]{geometry}
 \usepackage{luatexja-fontspec}
-\usepackage{graphicx,booktabs,longtable,amsmath,hyperref}
+% Keep this table preamble aligned with Pandoc's default LaTeX template.
+% `array` supplies \arraybackslash and column modifiers; `calc` supplies
+% \real and arithmetic used in generated proportional column widths.
+\usepackage{graphicx}
+\usepackage{booktabs,longtable,array,calc,multirow}
+\usepackage{etoolbox}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+\IfFileExists{footnotehyper.sty}{%
+  \usepackage{footnotehyper}\makesavenoteenv{longtable}%
+}{%
+  \usepackage{footnote}\makesavenoteenv{longtable}%
+}
+% Pandoc emits \tightlist for compact lists, including lists inside cells.
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+% Preserve aspect ratio when an extracted Word image exceeds the text area.
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
 \setmainjfont{Noto Serif CJK JP}
 \setsansjfont{Noto Sans CJK JP}
 \hypersetup{hidelinks}

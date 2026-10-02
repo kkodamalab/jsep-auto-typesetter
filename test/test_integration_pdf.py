@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.converter import extract_docx
+from backend.converter import ConversionError, extract_docx
 from backend.models import PdfRequest
 from backend.pdf import generate_pdf
 
@@ -53,18 +53,27 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
     _require_toolchain()
     source = tmp_path / "fictional.docx"
     _fictional_docx(source)
+    artifacts = Path("test-artifacts")
+    artifacts.mkdir(exist_ok=True)
+    shutil.copy2(source, artifacts / "fictional-manuscript.docx")
     manuscript = extract_docx(source, tmp_path)
     assert "media/" in manuscript.body_markdown
     assert "図1" in manuscript.body_markdown and "表1" in manuscript.body_markdown
 
     # Exercise edited metadata containing YAML/LaTeX-special characters.
     manuscript.title += ': 改訂版 "安全性"'
-    output = generate_pdf(PdfRequest(manuscript_id="integration", manuscript=manuscript), tmp_path)
+    try:
+        output = generate_pdf(PdfRequest(manuscript_id="integration", manuscript=manuscript), tmp_path)
+    except ConversionError:
+        # CI processes fictional data only. Preserve compiler diagnostics without
+        # enabling this export path for real uploads in the runtime application.
+        for name in ("manuscript.tex", "manuscript.log"):
+            diagnostic = tmp_path / name
+            if diagnostic.exists():
+                shutil.copy2(diagnostic, artifacts / name)
+        raise
     assert output.read_bytes().startswith(b"%PDF-") and output.stat().st_size > 10_000
 
-    artifacts = Path("test-artifacts")
-    artifacts.mkdir(exist_ok=True)
-    shutil.copy2(source, artifacts / "fictional-manuscript.docx")
     shutil.copy2(output, artifacts / "fictional-manuscript.pdf")
     subprocess.run(["pdftoppm", "-png", "-r", "120", str(output), str(artifacts / "page")], check=True)
 

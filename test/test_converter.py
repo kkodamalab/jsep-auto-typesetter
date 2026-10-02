@@ -55,3 +55,11 @@ def test_pdf_metadata_uses_safe_json_yaml(tmp_path):
     assert '"title": "引用: \\"値\\" & 100%"' in source
     assert "\\input{/etc/passwd}" in source
     assert "--from=markdown-raw_tex-raw_attribute" in commands[0]
+
+
+def test_template_supports_pandoc_table_primitives():
+    template = Path("backend/template.tex").read_text(encoding="utf-8")
+    for package in ("array", "calc", "longtable", "booktabs", "multirow"):
+        assert package in template
+    assert "\\providecommand{\\tightlist}" in template
+    assert "\\setkeys{Gin}" in template
