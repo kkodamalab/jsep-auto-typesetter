@@ -1,3 +1,4 @@
+import re
 import shutil
 import subprocess
 import unicodedata
@@ -20,6 +21,11 @@ def _require_toolchain():
 def _pdf_text_key(value: str) -> str:
     """Normalize PDF extraction presentation without hiding punctuation changes."""
     return "".join(unicodedata.normalize("NFKC", value).split())
+
+
+def _latex_preserves_oconnor(value: str) -> bool:
+    """Accept Pandoc's literal or escaped U+0027 representation in LaTeX."""
+    return re.search(r"O(?:'|\\textquotesingle(?:\{\})?\s*)Connor", value) is not None
 
 
 def _fictional_docx(path: Path):
@@ -100,7 +106,7 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
         failures.append("Markdown metadata preservation")
     if "100" not in latex_source or "１００" in latex_source:
         failures.append("LaTeX digit preservation")
-    if "O'Connor" not in latex_source or "O’Connor" in latex_source:
+    if not _latex_preserves_oconnor(latex_source) or "O’Connor" in latex_source:
         failures.append("LaTeX apostrophe preservation")
     # These are fictional CI-only sources and make stage-by-stage diagnosis
     # possible when a later PDF text check fails.
