@@ -5,6 +5,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from docx import Document
+
 from .models import Author, Manuscript
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -40,8 +42,12 @@ def extract_docx(source: Path, workdir: Path) -> Manuscript:
     _run(["pandoc", source.name, "-t", "markdown", "--wrap=none", "--extract-media=.", "-o", md_path.name], workdir)
     ast = json.loads(ast_path.read_text(encoding="utf-8"))
     meta = ast.get("meta", {})
-    title = _meta_text(meta.get("title")) or _first_heading(ast) or source.stem
-    authors = [Author(name=name) for name in _meta_authors(meta.get("author"))]
+    core_title, core_author = _core_properties(source)
+    # Explicit Pandoc metadata takes precedence, followed by Word document
+    # properties. A meaningful first heading is only the final fallback.
+    title = _meta_text(meta.get("title")) or core_title or _first_heading(ast) or source.stem
+    author_names = _meta_authors(meta.get("author")) or ([core_author] if core_author else [])
+    authors = [Author(name=name) for name in author_names]
     markdown = md_path.read_text(encoding="utf-8")
     abstract, body = _split_abstract(markdown)
     bibliography = _reference_section(body)
@@ -75,11 +81,21 @@ def _meta_authors(value) -> list[str]:
     return [text for item in items if (text := _inline_text(item).strip())]
 
 
+def _core_properties(source: Path) -> tuple[str, str]:
+    document = Document(source)
+    properties = document.core_properties
+    return (properties.title or "").strip(), (properties.author or "").strip()
+
+
 def _first_heading(ast: dict) -> str:
+    section_headings = {"抄録", "要旨", "abstract", "はじめに", "緒言", "introduction", "背景", "目的"}
     for block in ast.get("blocks", []):
         if block.get("t") == "Header":
             content = block.get("c", [])
-            return _inline_text(content[-1] if content else []).strip()
+            heading = _inline_text(content[-1] if content else []).strip()
+            normalized = re.sub(r"[\s:：.．\d]+", "", heading).casefold()
+            if normalized not in section_headings:
+                return heading
     return ""
 
 

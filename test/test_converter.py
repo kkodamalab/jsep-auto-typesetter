@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.converter import ConversionError, _inspect_ast, _split_abstract, extract_docx
+from backend.converter import _first_heading, _inspect_ast, _split_abstract, extract_docx
 from backend.models import Author, Manuscript, PdfRequest
 from backend.pdf import generate_pdf
 
@@ -28,11 +28,43 @@ def test_docx_extraction_uses_pandoc_ast(tmp_path):
         else:
             output.write_text("# 抄録\n\nこれは抄録。\n\n# 本文\n\nこれは本文。", encoding="utf-8")
 
-    with patch("backend.converter._run", side_effect=fake_run):
+    with patch("backend.converter._run", side_effect=fake_run), \
+         patch("backend.converter._core_properties", return_value=("Word側タイトル", "Word側著者")):
         manuscript = extract_docx(source, tmp_path)
     assert manuscript.title == "架空論文"
     assert manuscript.authors[0].name == "山田花子"
     assert manuscript.abstract == "これは抄録。"
+
+
+def test_word_core_properties_are_used_before_section_heading(tmp_path):
+    from docx import Document
+
+    source = tmp_path / "manuscript.docx"
+    document = Document()
+    document.core_properties.title = '架空: 「教育&学習」_100% #1'
+    document.core_properties.author = "山田 花子 & O'Connor"
+    document.add_heading("抄録", level=1)
+    document.save(source)
+
+    def fake_run(command, cwd, timeout=120):
+        output = cwd / command[command.index("-o") + 1]
+        if output.suffix == ".json":
+            output.write_text(json.dumps({"meta": {}, "blocks": [
+                {"t": "Header", "c": [1, ["", [], []], [{"t": "Str", "c": "抄録"}]]}
+            ]}), encoding="utf-8")
+        else:
+            output.write_text("# 抄録\n\n架空の要旨", encoding="utf-8")
+
+    with patch("backend.converter._run", side_effect=fake_run):
+        manuscript = extract_docx(source, tmp_path)
+    assert manuscript.title == '架空: 「教育&学習」_100% #1'
+    assert [author.name for author in manuscript.authors] == ["山田 花子 & O'Connor"]
+
+
+def test_common_section_headings_are_not_title_fallbacks():
+    for heading in ("抄録", "Abstract", "1. はじめに", "緒言", "Introduction"):
+        ast = {"blocks": [{"t": "Header", "c": [1, ["", [], []], [{"t": "Str", "c": heading}]]}]}
+        assert _first_heading(ast) == ""
 
 
 def test_pdf_metadata_uses_safe_json_yaml(tmp_path):

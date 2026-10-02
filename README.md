@@ -4,7 +4,7 @@ JSEP学術論文のWord原稿を、PandocとLuaLaTeX（luatexja）で横書きPD
 
 ## 実装済み（Phase 1）
 
-- `.docx` をPandoc AST/Markdownへ変換し、タイトル、著者、抄録、本文、見出し、図表、参考文献、数式を読み取る基盤
+- `.docx` をPandoc AST/Markdownへ変換し、Word文書プロパティを含むタイトル、著者、抄録、本文、見出し、図表、参考文献、数式を読み取る基盤
 - 抽出内容の確認・編集、文字サイズ・余白設定、変換警告表示
 - Pandoc → LuaLaTeX → PDF の実変換
 - GitHub Pages用の架空原稿限定デモ（変換APIは無効）

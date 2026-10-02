@@ -57,6 +57,10 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
     artifacts.mkdir(exist_ok=True)
     shutil.copy2(source, artifacts / "fictional-manuscript.docx")
     manuscript = extract_docx(source, tmp_path)
+    expected_title = '架空: 「教育&学習」_100% #1'
+    expected_author = "山田 花子 & O'Connor"
+    assert manuscript.title == expected_title
+    assert [author.name for author in manuscript.authors] == [expected_author]
     assert "media/" in manuscript.body_markdown
     assert "図1" in manuscript.body_markdown and "表1" in manuscript.body_markdown
 
@@ -81,7 +85,7 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
     pages = int(next(line.split(":", 1)[1] for line in info.splitlines() if line.startswith("Pages:")))
     assert pages >= 1
     text = subprocess.run(["pdftotext", str(output), "-"], check=True, capture_output=True, text=True).stdout
-    for expected in ("教育", "日本語本文", "架空条件", "E=mc", "参考文献"):
+    for expected in ("教育&学習", "山田 花子", "O'Connor", "日本語本文", "架空条件", "E=mc", "参考文献"):
         assert expected in text, f"PDF text is missing or garbled: {expected}"
     images = subprocess.run(["pdfimages", "-list", str(output)], check=True, capture_output=True, text=True).stdout
     assert len(images.splitlines()) > 2, "PDF contains no embedded image"
