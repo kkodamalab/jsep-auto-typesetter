@@ -86,7 +86,7 @@ def test_pdf_metadata_uses_safe_json_yaml(tmp_path):
     source = (tmp_path / "manuscript.md").read_text(encoding="utf-8")
     assert '"title": "引用: \\"値\\" & 100%"' in source
     assert "\\input{/etc/passwd}" in source
-    assert "--from=markdown-raw_tex-raw_attribute" in commands[0]
+    assert "--from=markdown-smart-raw_tex-raw_attribute" in commands[0]
 
 
 def test_template_supports_pandoc_table_primitives():
@@ -95,3 +95,4 @@ def test_template_supports_pandoc_table_primitives():
         assert package in template
     assert "\\providecommand{\\tightlist}" in template
     assert "\\setkeys{Gin}" in template
+    assert "\\setmainfont{Noto Serif CJK JP}[Ligatures={NoCommon,NoRequired,NoContextual}]" in template

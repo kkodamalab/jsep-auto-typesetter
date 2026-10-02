@@ -18,7 +18,9 @@ def generate_pdf(request: PdfRequest, workdir: Path) -> Path:
                           ensure_ascii=False)
     markdown.write_text(f"---\n{metadata}\n---\n\n# 抄録\n\n{request.manuscript.abstract}\n\n"
                         f"{request.manuscript.body_markdown}", encoding="utf-8")
-    _run(["pandoc", str(markdown), "--from=markdown-raw_tex-raw_attribute", "--to=latex", "--template", str(template),
+    # Disable Pandoc's smart typography: author names and titles must retain
+    # their source apostrophes/quotation marks exactly through PDF generation.
+    _run(["pandoc", str(markdown), "--from=markdown-smart-raw_tex-raw_attribute", "--to=latex", "--template", str(template),
           "--standalone", "--number-sections", "--resource-path", str(workdir), "-o", str(tex)], workdir)
     # Defense in depth: no shell escape, isolated temp cwd, and a hard timeout.
     _run(["lualatex", "--no-shell-escape", "--interaction=nonstopmode", "--halt-on-error", tex.name], workdir)
