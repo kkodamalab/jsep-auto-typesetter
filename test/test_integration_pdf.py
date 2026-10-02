@@ -62,6 +62,12 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
     output = generate_pdf(PdfRequest(manuscript_id="integration", manuscript=manuscript), tmp_path)
     assert output.read_bytes().startswith(b"%PDF-") and output.stat().st_size > 10_000
 
+    artifacts = Path("test-artifacts")
+    artifacts.mkdir(exist_ok=True)
+    shutil.copy2(source, artifacts / "fictional-manuscript.docx")
+    shutil.copy2(output, artifacts / "fictional-manuscript.pdf")
+    subprocess.run(["pdftoppm", "-png", "-r", "120", str(output), str(artifacts / "page")], check=True)
+
     info = subprocess.run(["pdfinfo", str(output)], check=True, capture_output=True, text=True).stdout
     pages = int(next(line.split(":", 1)[1] for line in info.splitlines() if line.startswith("Pages:")))
     assert pages >= 1
@@ -71,9 +77,4 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
     images = subprocess.run(["pdfimages", "-list", str(output)], check=True, capture_output=True, text=True).stdout
     assert len(images.splitlines()) > 2, "PDF contains no embedded image"
 
-    artifacts = Path("test-artifacts")
-    artifacts.mkdir(exist_ok=True)
-    shutil.copy2(source, artifacts / "fictional-manuscript.docx")
-    shutil.copy2(output, artifacts / "fictional-manuscript.pdf")
-    subprocess.run(["pdftoppm", "-png", "-r", "120", str(output), str(artifacts / "page")], check=True)
     assert len(list(artifacts.glob("page-*.png"))) == pages

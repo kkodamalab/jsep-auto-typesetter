@@ -1,6 +1,6 @@
 FROM python:3.13-slim AS base
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pandoc texlive-luatex texlive-lang-japanese texlive-latex-extra fonts-noto-cjk poppler-utils \
     && rm -rf /var/lib/apt/lists/*
@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir -r requirements-dev.txt
 COPY pytest.ini .
 COPY test test
 USER typesetter
-CMD ["pytest", "-m", "integration", "-q", "-rs", "--strict-markers"]
+CMD ["python", "-m", "pytest", "-m", "integration", "-q", "-rs", "--strict-markers"]
 
 FROM base AS runtime
 EXPOSE 8000

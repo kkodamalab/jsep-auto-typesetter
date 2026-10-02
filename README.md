@@ -25,7 +25,7 @@ docker compose up --build
 
 ```bash
 python -m pip install -r requirements-dev.txt
-pytest -q
+python -m pytest -q
 ```
 
 統合テストは画像、キャプション、表、数式、日本語、特殊文字を含む完全な架空の`.docx`を生成します。Pandocで抽出後、LuaLaTeXで実PDFを作成し、Popplerでページ数、抽出文字、埋め込み画像を検査します。さらに全ページをPNGへ変換し、`test-artifacts/`へDOCX・PDFとともに出力します。CIの統合テストはツール不足や成果物不足を成功扱いにしません。
