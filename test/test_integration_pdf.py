@@ -57,8 +57,11 @@ def _fictional_docx(path: Path):
 @pytest.mark.integration
 def test_fictional_docx_to_verified_pdf(tmp_path):
     _require_toolchain()
-    assert _pdf_text_key("架空: 「教育」_１００% #１") == _pdf_text_key("架空:「教育」_100% #1")
-    assert _pdf_text_key("O’Connor") != _pdf_text_key("O'Connor")
+    failures = []
+    if _pdf_text_key("架空: 「教育」_１００% #１") != _pdf_text_key("架空:「教育」_100% #1"):
+        failures.append("comparison normalization")
+    if _pdf_text_key("O’Connor") == _pdf_text_key("O'Connor"):
+        failures.append("apostrophe distinction")
     source = tmp_path / "fictional.docx"
     _fictional_docx(source)
     artifacts = Path("test-artifacts")
@@ -67,10 +70,14 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
     manuscript = extract_docx(source, tmp_path)
     expected_title = '架空: 「教育&学習」_100% #1'
     expected_author = "山田 花子 & O'Connor"
-    assert manuscript.title == expected_title
-    assert [author.name for author in manuscript.authors] == [expected_author]
-    assert "media/" in manuscript.body_markdown
-    assert "図1" in manuscript.body_markdown and "表1" in manuscript.body_markdown
+    if manuscript.title != expected_title:
+        failures.append("extracted title")
+    if [author.name for author in manuscript.authors] != [expected_author]:
+        failures.append("extracted author")
+    if "media/" not in manuscript.body_markdown:
+        failures.append("extracted image reference")
+    if "図1" not in manuscript.body_markdown or "表1" not in manuscript.body_markdown:
+        failures.append("extracted captions")
 
     try:
         output = generate_pdf(PdfRequest(manuscript_id="integration", manuscript=manuscript), tmp_path)
@@ -82,22 +89,31 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
             if diagnostic.exists():
                 shutil.copy2(diagnostic, artifacts / name)
         raise
-    assert output.read_bytes().startswith(b"%PDF-") and output.stat().st_size > 10_000
+    if not output.read_bytes().startswith(b"%PDF-") or output.stat().st_size <= 10_000:
+        failures.append("PDF file")
 
     # Establish where transformations occur: both pre-PDF stages must retain
     # ASCII digits and the straight apostrophe from the Word properties.
     markdown_source = (tmp_path / "manuscript.md").read_text(encoding="utf-8")
     latex_source = (tmp_path / "manuscript.tex").read_text(encoding="utf-8")
-    assert expected_title in markdown_source and expected_author in markdown_source
-    assert "100" in latex_source and "１００" not in latex_source
-    assert "O'Connor" in latex_source and "O’Connor" not in latex_source
+    if expected_title not in markdown_source or expected_author not in markdown_source:
+        failures.append("Markdown metadata preservation")
+    if "100" not in latex_source or "１００" in latex_source:
+        failures.append("LaTeX digit preservation")
+    if "O'Connor" not in latex_source or "O’Connor" in latex_source:
+        failures.append("LaTeX apostrophe preservation")
+    # These are fictional CI-only sources and make stage-by-stage diagnosis
+    # possible when a later PDF text check fails.
+    shutil.copy2(tmp_path / "manuscript.md", artifacts / "manuscript.md")
+    shutil.copy2(tmp_path / "manuscript.tex", artifacts / "manuscript.tex")
 
     shutil.copy2(output, artifacts / "fictional-manuscript.pdf")
     subprocess.run(["pdftoppm", "-png", "-r", "120", str(output), str(artifacts / "page")], check=True)
 
     info = subprocess.run(["pdfinfo", str(output)], check=True, capture_output=True, text=True).stdout
     pages = int(next(line.split(":", 1)[1] for line in info.splitlines() if line.startswith("Pages:")))
-    assert pages >= 1
+    if pages < 1:
+        failures.append("page count")
     text = subprocess.run(["pdftotext", str(output), "-"], check=True, capture_output=True, text=True).stdout
     raw_text = subprocess.run(["pdftotext", "-raw", str(output), "-"], check=True, capture_output=True, text=True).stdout
     (artifacts / "pdftotext.txt").write_text(text, encoding="utf-8")
@@ -115,7 +131,7 @@ def test_fictional_docx_to_verified_pdf(tmp_path):
         "references": "山田花子（2026）架空研究の方法。架空出版。",
     }
     extracted_key = _pdf_text_key(text)
-    failures = [name for name, expected in expected_text.items() if _pdf_text_key(expected) not in extracted_key]
+    failures.extend(name for name, expected in expected_text.items() if _pdf_text_key(expected) not in extracted_key)
     if len(images.splitlines()) <= 2:
         failures.append("image")
     if len(list(artifacts.glob("page-*.png"))) != pages:
