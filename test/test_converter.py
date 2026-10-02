@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.converter import _inspect_ast, _split_abstract, extract_docx
+from backend.converter import ConversionError, _inspect_ast, _split_abstract, extract_docx
+from backend.models import Author, Manuscript, PdfRequest
+from backend.pdf import generate_pdf
 
 
 def test_abstract_is_extracted_from_markdown():
@@ -20,7 +22,7 @@ def test_docx_extraction_uses_pandoc_ast(tmp_path):
     source.write_bytes(b"docx")
 
     def fake_run(command, cwd, timeout=120):
-        output = Path(command[command.index("-o") + 1])
+        output = cwd / command[command.index("-o") + 1]
         if output.suffix == ".json":
             output.write_text(json.dumps({"meta": {"title": {"t": "MetaString", "c": "架空論文"}, "author": {"t": "MetaList", "c": [{"t": "MetaString", "c": "山田花子"}]}}, "blocks": []}), encoding="utf-8")
         else:
@@ -31,3 +33,25 @@ def test_docx_extraction_uses_pandoc_ast(tmp_path):
     assert manuscript.title == "架空論文"
     assert manuscript.authors[0].name == "山田花子"
     assert manuscript.abstract == "これは抄録。"
+
+
+def test_pdf_metadata_uses_safe_json_yaml(tmp_path):
+    manuscript = Manuscript(title='引用: "値" & 100%', authors=[Author(name="O'Connor & 山田")],
+                            abstract="特殊文字 # $ % & _ { }", body_markdown="本文 \\input{/etc/passwd}")
+    request = PdfRequest(manuscript_id="test", manuscript=manuscript)
+
+    commands = []
+
+    def fake_run(command, cwd, timeout=120):
+        commands.append(command)
+        if "--to=latex" in command:
+            (cwd / "manuscript.tex").write_text("safe", encoding="utf-8")
+        else:
+            (cwd / "manuscript.pdf").write_bytes(b"%PDF-safe")
+
+    with patch("backend.pdf._run", side_effect=fake_run):
+        generate_pdf(request, tmp_path)
+    source = (tmp_path / "manuscript.md").read_text(encoding="utf-8")
+    assert '"title": "引用: \\"値\\" & 100%"' in source
+    assert "\\input{/etc/passwd}" in source
+    assert "--from=markdown-raw_tex-raw_attribute" in commands[0]

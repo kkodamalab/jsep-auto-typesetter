@@ -36,8 +36,8 @@ def extract_docx(source: Path, workdir: Path) -> Manuscript:
     media = workdir / "media"
     ast_path = workdir / "document.json"
     md_path = workdir / "body.md"
-    _run(["pandoc", str(source), "-t", "json", f"--extract-media={media}", "-o", str(ast_path)], workdir)
-    _run(["pandoc", str(source), "-t", "markdown", f"--extract-media={media}", "-o", str(md_path)], workdir)
+    _run(["pandoc", source.name, "-t", "json", "--extract-media=.", "-o", ast_path.name], workdir)
+    _run(["pandoc", source.name, "-t", "markdown", "--wrap=none", "--extract-media=.", "-o", md_path.name], workdir)
     ast = json.loads(ast_path.read_text(encoding="utf-8"))
     meta = ast.get("meta", {})
     title = _meta_text(meta.get("title")) or _first_heading(ast) or source.stem

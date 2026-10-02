@@ -1,10 +1,11 @@
 const $ = (selector) => document.querySelector(selector);
 let demoMode = location.hostname.endsWith('github.io');
+let manuscriptId = '';
 
 function show(message, error = false) { const node = $('#notice'); node.hidden = !message; node.textContent = message; node.classList.toggle('error', error); }
-function fill(data) { $('#title').value = data.title || ''; $('#authors').value = (data.authors || []).map(a => `${a.name} | ${a.affiliation || ''}`).join('\n'); $('#abstract').value = data.abstract || ''; $('#body').value = data.body_markdown || ''; $('#warnings').innerHTML = (data.warnings || []).map(w => `<p class="warning">⚠ ${escapeHtml(w)}</p>`).join(''); }
+function fill(data) { manuscriptId = data.manuscript_id || ''; $('#title').value = data.title || ''; $('#authors').value = (data.authors || []).map(a => `${a.name} | ${a.affiliation || ''}`).join('\n'); $('#abstract').value = data.abstract || ''; $('#body').value = data.body_markdown || ''; $('#warnings').innerHTML = (data.warnings || []).map(w => `<p class="warning">⚠ ${escapeHtml(w)}</p>`).join(''); }
 function escapeHtml(value) { const div = document.createElement('div'); div.textContent = value; return div.innerHTML; }
-function payload() { return { manuscript: { title: $('#title').value, authors: $('#authors').value.split('\n').filter(Boolean).map(row => { const [name, ...rest] = row.split('|'); return {name:name.trim(), affiliation:rest.join('|').trim()}; }), abstract:$('#abstract').value, body_markdown:$('#body').value, bibliography:'', warnings:[] }, font_size:Number($('#font').value), margin_mm:Number($('#margin').value) }; }
+function payload() { return { manuscript_id: manuscriptId, manuscript: { title: $('#title').value, authors: $('#authors').value.split('\n').filter(Boolean).map(row => { const [name, ...rest] = row.split('|'); return {name:name.trim(), affiliation:rest.join('|').trim()}; }), abstract:$('#abstract').value, body_markdown:$('#body').value, bibliography:'', warnings:[] }, font_size:Number($('#font').value), margin_mm:Number($('#margin').value) }; }
 
 async function loadDemo() { fill(await fetch('./demo.json').then(r => r.json())); show('架空の原稿を読み込みました。デモデータは自由に編集できます。'); }
 $('#demo').addEventListener('click', loadDemo);

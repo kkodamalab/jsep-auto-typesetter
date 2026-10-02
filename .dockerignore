@@ -1,5 +1,4 @@
 .git
 .github
-test
 __pycache__
 *.pyc
